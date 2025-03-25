@@ -109,30 +109,33 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public long buyCart(long userId) {
-        User user = userService.getUser(userId);
-        Order order = orderService.makeNewOrder(user);
         Cart cart = cartRepository.findByUserId(userId).orElseThrow(() -> new NoSuchElementException("cart not found"));
-        Set<CartItem> cartItems = cart.getCartItems();
-        if (cartItems.isEmpty()) {
+        if (isCartEmpty(cart)) {
             throw new RuntimeException("cart is empty");
         }
+        User user = userService.getUser(userId);
+        Order order = orderService.makeNewOrder(user);
+        Set<CartItem> cartItems = cart.getCartItems();
+
         HashSet<OrderItem> orderItemHashSet = new HashSet<>();
         BigDecimal total = BigDecimal.ZERO;
         for (CartItem ci : cartItems) {
-            Item item = ci.getItem();
             long quantity = ci.getQuantity();
-            BigDecimal price = item.getPrice();
-            BigDecimal sum = price.multiply(BigDecimal.valueOf(quantity));
-            OrderItem oi = OrderItem.builder()
-                    .order(order)
-                    .item(item)
-                    .quantity(quantity)
-                    .unit(item.getUnit())
-                    .orderPrice(price)
-                    .sum(sum)
-                    .build();
-            orderItemHashSet.add(oi);
-            total = total.add(sum);
+            if (quantity > 0) {
+                Item item = ci.getItem();
+                BigDecimal price = item.getPrice();
+                BigDecimal sum = price.multiply(BigDecimal.valueOf(quantity));
+                OrderItem oi = OrderItem.builder()
+                        .order(order)
+                        .item(item)
+                        .quantity(quantity)
+                        .unit(item.getUnit())
+                        .orderPrice(price)
+                        .sum(sum)
+                        .build();
+                orderItemHashSet.add(oi);
+                total = total.add(sum);
+            }
         }
         order.setNumber(generateOrderNumber(order));
         order.setOrderItems(orderItemHashSet);
@@ -155,5 +158,18 @@ public class CartServiceImpl implements CartService {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
         String formattedString = date.format(formatter);
         return formattedString + "-" + order.getId() + "-" + (int) (Math.random() * 1000);
+    }
+
+    private boolean isCartEmpty(Cart cart) {
+        Set<CartItem> cartItems = cart.getCartItems();
+        if (cartItems.isEmpty()) {
+            return true;
+        }
+        for (CartItem ci : cartItems) {
+            if (ci.getQuantity() > 0) {
+                return false;
+            }
+        }
+        return true;
     }
 }
